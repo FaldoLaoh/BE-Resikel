@@ -377,24 +377,20 @@ app.get("/uom", (req, res) => {
 app.post("/uom", async (req, res) => {
   const { name, factor } = req.body;
 
-  // Validate the required fields
   if (!name || !factor) {
     return res.status(400).json({ message: "Name and factor are required." });
   }
 
-  // Automatically populate other fields
   const category_id = 1; // Default category_id
-  const created_by = 1; // Example: Use user ID from session or a default value
-  const create_date = new Date().toISOString(); // Current timestamp
+  const created_by = 1; // Example user ID
+  const create_date = new Date().toISOString().slice(0, 19).replace("T", " "); // Convert to 'YYYY-MM-DD HH:MM:SS'
 
   try {
-    // SQL Query to insert a new UOM
     const query = `
       INSERT INTO uom_uom (category_id, created_by, name, factor, create_date)
       VALUES (?, ?, ?, ?, ?)
     `;
 
-    // Execute the query using async/await
     const [result] = await db.query(query, [
       category_id,
       created_by,
@@ -403,7 +399,6 @@ app.post("/uom", async (req, res) => {
       create_date,
     ]);
 
-    // Send success response
     res.status(201).json({
       message: "UOM added successfully",
       id: result.insertId,
@@ -412,8 +407,85 @@ app.post("/uom", async (req, res) => {
     console.error("Error details:", error); // Log detailed error
     res.status(500).json({
       message: "Error adding UOM",
-      error: error.message, // Include the error message in the response for debugging
+      error: error.message,
     });
+  }
+});
+
+// DELETE UOM by ID
+// Create a regular connection or pool (non-promise)
+
+app.delete("/uom/:id", (req, res) => {
+  const { id } = req.params;
+
+  if (!id) {
+    return res.status(400).json({
+      message: "UOM ID is required.",
+    });
+  }
+
+  const query = `DELETE FROM uom_uom WHERE id = ?`;
+
+  db.query(query, [id], (err, result) => {
+    if (err) {
+      console.error("Error deleting UOM:", err);
+      return res.status(500).json({
+        message: "Failed to delete UOM",
+        error: err.message,
+      });
+    }
+
+    if (result.affectedRows === 0) {
+      console.log(`UOM with ID: ${id} not found.`);
+      return res.status(404).json({ message: "UOM not found" });
+    }
+
+    console.log(`UOM with ID: ${id} deleted successfully`);
+    return res.status(200).json({ message: "UOM deleted successfully" });
+  });
+});
+
+// EDIT UOM by ID (PUT)
+app.put("/uom/:id", async (req, res) => {
+  const { id } = req.params;
+  const { name, factor, category_id, created_by } = req.body;
+
+  // Validate required fields
+  if (!name || !factor) {
+    return res.status(400).json({ message: "Name and factor are required." });
+  }
+
+  try {
+    // SQL Query to update the UOM
+    const query = `
+      UPDATE uom_uom 
+      SET 
+        name = ?, 
+        factor = ?, 
+        category_id = ?, 
+        created_by = ? 
+      WHERE id = ?
+    `;
+
+    // Execute the query using async/await
+    const [result] = await db.query(query, [
+      name,
+      factor,
+      category_id || null, // Default to NULL if not provided
+      created_by || null, // Default to NULL if not provided
+      id,
+    ]);
+
+    if (result.affectedRows === 0) {
+      return res.status(404).json({ message: "UOM not found" });
+    }
+
+    res.status(200).json({ message: "UOM updated successfully" });
+  } catch (error) {
+    console.error("Error updating UOM:", error);
+    res
+      .status(500)
+      .json({ message: "Error updating UOM", error: error.message });
   }
 });
 
