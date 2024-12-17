@@ -489,6 +489,86 @@ app.put("/uom/:id", async (req, res) => {
   }
 });
 
+// Get All Categories
+app.get("/api/categories", (req, res) => {
+  const sql = "SELECT * FROM product_category";
+  db.query(sql, (err, results) => {
+    if (err) {
+      console.error(err);
+      return res.status(500).json({ message: "Failed to fetch categories" });
+    }
+    res.json(results);
+  });
+});
+
+// Get Category by ID
+app.get("/api/categories/:id", (req, res) => {
+  const { id } = req.params;
+  const sql = "SELECT * FROM product_category WHERE id = ?";
+  db.query(sql, [id], (err, results) => {
+    if (err) {
+      console.error(err);
+      return res.status(500).json({ message: "Failed to fetch the category" });
+    }
+    if (results.length === 0) {
+      return res.status(404).json({ message: "Category not found" });
+    }
+    res.json(results[0]);
+  });
+});
+
+// Create a New Category
+app.post("/api/categories", (req, res) => {
+  const { name } = req.body;
+  if (!name) {
+    return res.status(400).json({ message: "Category name is required" });
+  }
+  const sql = "INSERT INTO product_category (name) VALUES (?)";
+  db.query(sql, [name], (err, results) => {
+    if (err) {
+      console.error(err);
+      return res.status(500).json({ message: "Failed to create the category" });
+    }
+    res.status(201).json({ id: results.insertId, name });
+  });
+});
+
+// Update a Category
+app.put("/api/categories/:id", (req, res) => {
+  const { id } = req.params;
+  const { name } = req.body;
+  if (!name) {
+    return res.status(400).json({ message: "Category name is required" });
+  }
+  const sql = "UPDATE product_category SET name = ? WHERE id = ?";
+  db.query(sql, [name, id], (err, results) => {
+    if (err) {
+      console.error(err);
+      return res.status(500).json({ message: "Failed to update the category" });
+    }
+    if (results.affectedRows === 0) {
+      return res.status(404).json({ message: "Category not found" });
+    }
+    res.json({ id, name });
+  });
+});
+
+// Delete a Category
+app.delete("/api/categories/:id", (req, res) => {
+  const { id } = req.params;
+  const sql = "DELETE FROM product_category WHERE id = ?";
+  db.query(sql, [id], (err, results) => {
+    if (err) {
+      console.error(err);
+      return res.status(500).json({ message: "Failed to delete the category" });
+    }
+    if (results.affectedRows === 0) {
+      return res.status(404).json({ message: "Category not found" });
+    }
+    res.json({ message: "Category deleted successfully" });
+  });
+});
+
 // Start the server
 app.listen(process.env.PORT, () => {
   console.log("Server is running on port " + process.env.PORT);
