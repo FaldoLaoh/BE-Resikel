@@ -863,9 +863,19 @@ app.get("/api/post_post", (req, res) => {
 });
 
 app.get("/api/post_post/kegiatan", (req, res) => {
-  const query = "SELECT * FROM post_post WHERE category_id = 1";
+  // Get 'page' and 'limit' query parameters, set defaults if not provided
+  const page = parseInt(req.query.page) || 1; // Default to page 1
+  const limit = parseInt(req.query.limit) || 4; // Default to 4 posts per page
+  const offset = (page - 1) * limit; // Calculate the offset for the SQL query
 
-  db.query(query, (err, result) => {
+  // Modify the query to include LIMIT and OFFSET for pagination
+  const query = `
+    SELECT * FROM post_post 
+    WHERE category_id = 1
+    LIMIT ? OFFSET ?
+  `;
+
+  db.query(query, [limit, offset], (err, result) => {
     if (err) {
       return res.status(500).json({ error: err.message });
     }
@@ -874,7 +884,90 @@ app.get("/api/post_post/kegiatan", (req, res) => {
       return res.status(404).json({ message: "No posts found" });
     }
 
-    res.status(200).json(result); // Return all posts matching the category_id
+    // Respond with the posts and also include pagination information
+    res.status(200).json({
+      posts: result,
+      currentPage: page,
+      totalPages: Math.ceil(result.length / limit), // Calculate total pages
+    });
+  });
+});
+
+app.post("/api/post_post/artikel", upload.single("foto"), (req, res) => {
+  // Check if the file is uploaded
+  if (!req.file) {
+    return res.status(400).json({ error: "No file uploaded" });
+  }
+
+  // Extract other form fields from req.body
+  const { user_id, category_id, title, description } = req.body;
+
+  // Get the uploaded file's path or filename
+  const foto = req.file ? req.file.filename : null;
+
+  // Prepare the SQL query to insert the data into the database
+  const query =
+    "INSERT INTO post_post (user_id, category_id, title, foto, description) VALUES (?, 2, ?, ?, ?)";
+
+  db.query(
+    query,
+    [user_id, category_id, title, foto, description],
+    (err, result) => {
+      if (err) {
+        console.error("Database error:", err);
+        return res.status(500).json({ error: err.message });
+      }
+      res.status(201).json({ message: "Post created", id: result.insertId });
+    }
+  );
+});
+
+app.get("/api/post_post/artikel", (req, res) => {
+  // Get 'page' and 'limit' query parameters, set defaults if not provided
+  const page = parseInt(req.query.page) || 1; // Default to page 1
+  const limit = parseInt(req.query.limit) || 4; // Default to 4 posts per page
+  const offset = (page - 1) * limit; // Calculate the offset for the SQL query
+
+  // Modify the query to include LIMIT and OFFSET for pagination
+  const query = `
+    SELECT * FROM post_post 
+    WHERE category_id = 2
+    LIMIT ? OFFSET ?
+  `;
+
+  db.query(query, [limit, offset], (err, result) => {
+    if (err) {
+      return res.status(500).json({ error: err.message });
+    }
+
+    if (result.length === 0) {
+      return res.status(404).json({ message: "No posts found" });
+    }
+
+    // Respond with the posts and also include pagination information
+    res.status(200).json({
+      posts: result,
+      currentPage: page,
+      totalPages: Math.ceil(result.length / limit), // Calculate total pages
+    });
+  });
+});
+
+app.get("/api/post_post/artikel/:id", (req, res) => {
+  const { id } = req.params; // Extract the ID from the URL parameters
+
+  const query = "SELECT * FROM post_post WHERE id = ? AND category_id = 2";
+
+  db.query(query, [id], (err, result) => {
+    if (err) {
+      return res.status(500).json({ error: err.message });
+    }
+
+    if (result.length === 0) {
+      return res.status(404).json({ message: "Post not found" });
+    }
+
+    res.status(200).json(result[0]); // Return the first post that matches the ID
   });
 });
 
