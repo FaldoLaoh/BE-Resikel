@@ -7,7 +7,17 @@ const CookieParser = require("cookie-parser");
 const bodyParser = require("body-parser");
 const bcrypt = require("bcrypt");
 const app = express();
+const multer = require("multer");
+const path = require("path");
 dotenv.config({ path: "./.env" });
+const fs = require("fs");
+
+// Ensure the uploads directory exists
+const uploadDir = path.join(__dirname, "uploads");
+if (!fs.existsSync(uploadDir)) {
+  fs.mkdirSync(uploadDir, { recursive: true });
+  console.log("Uploads directory created");
+}
 
 app.use(bodyParser.json()); // Parses JSON bodies
 app.use(express.json());
@@ -489,6 +499,18 @@ app.put("/uom/:id", async (req, res) => {
   }
 });
 
+// Fetch all UOMs
+app.get("/uom/byId", (req, res) => {
+  const query = "SELECT id, name FROM db_resikel.uom_uom";
+  db.query(query, (err, results) => {
+    if (err) {
+      console.error("Error fetching UOMs: ", err.message);
+      return res.status(500).json({ error: "Internal Server Error" });
+    }
+    res.json(results);
+  });
+});
+
 // Get All Categories
 app.get("/api/categories", (req, res) => {
   const sql = "SELECT * FROM product_category";
@@ -500,6 +522,8 @@ app.get("/api/categories", (req, res) => {
     res.json(results);
   });
 });
+
+//name by id category
 
 // Get Category by ID
 app.get("/api/categories/:id", (req, res) => {
@@ -566,6 +590,420 @@ app.delete("/api/categories/:id", (req, res) => {
       return res.status(404).json({ message: "Category not found" });
     }
     res.json({ message: "Category deleted successfully" });
+  });
+});
+
+app.get("/api/categories/byId", (req, res) => {
+  const query = "SELECT id, name FROM db_resikel.product_category";
+  db.query(query, (err, results) => {
+    if (err) {
+      console.error("Error fetching categories: ", err.message);
+      return res.status(500).json({ error: "Internal Server Error" });
+    }
+    res.json(results);
+  });
+});
+//Product
+
+// API Endpoint: Fetch all products
+// app.get("/api/products", (req, res) => {
+//   const query = `
+//     SELECT
+//       product_product.id,
+//       product_product.category_id,
+//       product_product.uom_id,
+//       product_product.created_by,
+//       product_product.updated_by,
+//       product_product.name,
+//       product_product.list_price,
+//       product_product.cost_price,
+//       product_product.image,
+//       product_product.create_date,
+//       product_product.write_date
+//     FROM db_resikel.product_product;
+//   `;
+
+//   db.query(query, (err, results) => {
+//     if (err) {
+//       console.error("Error fetching products: ", err.message);
+//       return res.status(500).json({ error: "Internal Server Error" });
+//     }
+//     res.json(results);
+//   });
+// });
+
+// API Endpoint: Fetch all products
+app.get("/api/products", (req, res) => {
+  const query = `
+    SELECT 
+      pp.id, 
+      pp.name, 
+      pp.list_price, 
+      pp.cost_price, 
+      pp.category_id, 
+      pc.name AS category_name,  -- Category Name
+      pp.uom_id, 
+      u.name AS uom_name,       -- UOM Name
+      pp.created_by, 
+      pp.updated_by, 
+      pp.create_date, 
+      pp.write_date 
+    FROM db_resikel.product_product pp
+    LEFT JOIN db_resikel.product_category pc ON pp.category_id = pc.id
+    LEFT JOIN db_resikel.uom_uom u ON pp.uom_id = u.id;
+  `;
+
+  db.query(query, (err, results) => {
+    if (err) {
+      console.error("Error fetching products: ", err.message);
+      return res.status(500).json({ error: "Internal Server Error" });
+    }
+    res.json(results);
+  });
+});
+
+// Create new product
+app.post("/api/products", (req, res) => {
+  const { name, category_id, uom_id, list_price, cost_price } = req.body;
+  const query = `
+    INSERT INTO db_resikel.product_product (name, category_id, uom_id, list_price, cost_price)
+    VALUES (?, ?, ?, ?, ?)
+  `;
+  db.query(
+    query,
+    [name, category_id, uom_id, list_price, cost_price],
+    (err, result) => {
+      if (err) {
+        console.error("Error creating product: ", err.message);
+        return res.status(500).json({ error: "Internal Server Error" });
+      }
+      res.status(201).json({ message: "Product created successfully" });
+    }
+  );
+});
+
+// Update existing product
+app.put("/api/products/:id", (req, res) => {
+  const { id } = req.params;
+  const { name, category_id, uom_id, list_price, cost_price } = req.body;
+  const query = `
+    UPDATE db_resikel.product_product
+    SET name = ?, category_id = ?, uom_id = ?, list_price = ?, cost_price = ?
+    WHERE id = ?
+  `;
+  db.query(
+    query,
+    [name, category_id, uom_id, list_price, cost_price, id],
+    (err, result) => {
+      if (err) {
+        console.error("Error updating product: ", err.message);
+        return res.status(500).json({ error: "Internal Server Error" });
+      }
+      res.status(200).json({ message: "Product updated successfully" });
+    }
+  );
+});
+
+// DELETE: Remove a product
+app.delete("/api/products/:id", (req, res) => {
+  const { id } = req.params;
+
+  const query = "DELETE FROM db_resikel.product_product WHERE id=?;";
+  db.query(query, [id], (err) => {
+    if (err) {
+      console.error("Error deleting product: ", err.message);
+      return res.status(500).json({ error: "Internal Server Error" });
+    }
+    res.json({ message: "Product deleted successfully" });
+  });
+});
+
+// Endpoint to get aggregate statistics for the dashboard
+app.get("/api/dashboard/stats", (req, res) => {
+  const userCountQuery = `
+    SELECT 
+      COUNT(*) AS user_count,
+      SUM(CASE WHEN active = 1 THEN 1 ELSE 0 END) AS active_user_count,
+      SUM(CASE WHEN active = 0 THEN 1 ELSE 0 END) AS inactive_user_count
+    FROM res_users
+  `;
+  const productCountQuery =
+    "SELECT COUNT(*) AS product_count FROM product_product";
+  const uomCountQuery = "SELECT COUNT(*) AS uom_count FROM uom_uom";
+
+  db.query(userCountQuery, (err, userResult) => {
+    if (err)
+      return res
+        .status(500)
+        .json({ Error: "Failed to fetch user count", Details: err.message });
+    db.query(productCountQuery, (err, productResult) => {
+      if (err)
+        return res.status(500).json({
+          Error: "Failed to fetch product count",
+          Details: err.message,
+        });
+      db.query(uomCountQuery, (err, uomResult) => {
+        if (err)
+          return res
+            .status(500)
+            .json({ Error: "Failed to fetch UOM count", Details: err.message });
+
+        // Return the aggregated data
+        return res.json({
+          user_count: userResult[0].user_count,
+          active_user_count: userResult[0].active_user_count,
+          inactive_user_count: userResult[0].inactive_user_count,
+          product_count: productResult[0].product_count,
+          uom_count: uomResult[0].uom_count,
+        });
+      });
+    });
+  });
+});
+
+// Create a new category
+app.post("/api/post_category", (req, res) => {
+  const { name } = req.body;
+  const query = "INSERT INTO post_category (name) VALUES (?)";
+
+  db.query(query, [name], (err, result) => {
+    if (err) {
+      return res.status(500).json({ error: err.message });
+    }
+    res.status(201).json({ message: "Category created", id: result.insertId });
+  });
+});
+
+// Get all categories
+app.get("/api/post_category", (req, res) => {
+  const query = "SELECT * FROM post_category";
+
+  db.query(query, (err, result) => {
+    if (err) {
+      return res.status(500).json({ error: err.message });
+    }
+    res.json(result);
+  });
+});
+
+// Update a category
+app.put("/api/post_category/:id", (req, res) => {
+  const { id } = req.params;
+  const { name } = req.body;
+  const query = "UPDATE post_category SET name = ? WHERE id = ?";
+
+  db.query(query, [name, id], (err, result) => {
+    if (err) {
+      return res.status(500).json({ error: err.message });
+    }
+    if (result.affectedRows === 0) {
+      return res.status(404).json({ message: "Category not found" });
+    }
+    res.json({ message: "Category updated" });
+  });
+});
+
+// Delete a category
+app.delete("/api/post_category/:id", (req, res) => {
+  const { id } = req.params;
+  const query = "DELETE FROM post_category WHERE id = ?";
+
+  db.query(query, [id], (err, result) => {
+    if (err) {
+      return res.status(500).json({ error: err.message });
+    }
+    if (result.affectedRows === 0) {
+      return res.status(404).json({ message: "Category not found" });
+    }
+    res.json({ message: "Category deleted" });
+  });
+});
+
+// -------- CRUD for Post (Article) --------
+const storage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    const uploadDir = "uploads/";
+    if (!fs.existsSync(uploadDir)) {
+      fs.mkdirSync(uploadDir);
+    }
+    cb(null, uploadDir);
+  },
+  filename: (req, file, cb) => {
+    const uniqueSuffix = Date.now() + "-" + Math.round(Math.random() * 1e9);
+    cb(
+      null,
+      file.fieldname + "-" + uniqueSuffix + path.extname(file.originalname)
+    );
+  },
+});
+
+// Initialize multer with file size limit (optional)
+const upload = multer({
+  storage: storage,
+  limits: { fileSize: 10 * 1024 * 1024 }, // File size limit of 10MB
+  fileFilter: (req, file, cb) => {
+    // Only allow image files
+    if (file.mimetype.startsWith("image/")) {
+      cb(null, true);
+    } else {
+      cb(new Error("File is not an image"), false); // Reject non-image files
+    }
+  },
+});
+
+app.get("/api/post_post", (req, res) => {
+  const query = "SELECT * FROM post_post";
+
+  db.query(query, (err, result) => {
+    if (err) {
+      return res.status(500).json({ error: err.message });
+    }
+    res.status(200).json(result); // Send all posts in the response
+  });
+});
+
+app.get("/api/post_post/kegiatan", (req, res) => {
+  const query = "SELECT * FROM post_post WHERE category_id = 1";
+
+  db.query(query, (err, result) => {
+    if (err) {
+      return res.status(500).json({ error: err.message });
+    }
+
+    if (result.length === 0) {
+      return res.status(404).json({ message: "No posts found" });
+    }
+
+    res.status(200).json(result); // Return all posts matching the category_id
+  });
+});
+
+app.get("/api/post_post/kegiatan/:id", (req, res) => {
+  const { id } = req.params; // Extract the ID from the URL parameters
+
+  const query = "SELECT * FROM post_post WHERE id = ? AND category_id = 1";
+
+  db.query(query, [id], (err, result) => {
+    if (err) {
+      return res.status(500).json({ error: err.message });
+    }
+
+    if (result.length === 0) {
+      return res.status(404).json({ message: "Post not found" });
+    }
+
+    res.status(200).json(result[0]); // Return the first post that matches the ID
+  });
+});
+
+// Create a new post
+// app.post("/api/post_post", (req, res) => {
+//   const { user_id, category_id, title, foto, description } = req.body;
+//   const query =
+//     "INSERT INTO post_post (user_id, category_id, title, foto, description) VALUES (?, ?, ?, ?, ?)";
+
+//   db.query(
+//     query,
+//     [user_id, category_id, title, foto, description],
+//     (err, result) => {
+//       if (err) {
+//         return res.status(500).json({ error: err.message });
+//       }
+//       res.status(201).json({ message: "Post created", id: result.insertId });
+//     }
+//   );
+// });
+
+// // Update a post
+// app.put("/api/post_post/:id", (req, res) => {
+//   const { id } = req.params;
+//   const { user_id, category_id, title, foto, description } = req.body;
+//   const query =
+//     "UPDATE post_post SET user_id = ?, category_id = ?, title = ?, foto = ?, description = ? WHERE id = ?";
+
+//   db.query(
+//     query,
+//     [user_id, category_id, title, foto, description, id],
+//     (err, result) => {
+//       if (err) {
+//         return res.status(500).json({ error: err.message });
+//       }
+//       if (result.affectedRows === 0) {
+//         return res.status(404).json({ message: "Post not found" });
+//       }
+//       res.json({ message: "Post updated" });
+//     }
+//   );
+// });
+app.post("/api/post_post", upload.single("foto"), (req, res) => {
+  // Check if the file is uploaded
+  if (!req.file) {
+    return res.status(400).json({ error: "No file uploaded" });
+  }
+
+  // Extract other form fields from req.body
+  const { user_id, category_id, title, description } = req.body;
+
+  // Get the uploaded file's path or filename
+  const foto = req.file ? req.file.filename : null;
+
+  // Prepare the SQL query to insert the data into the database
+  const query =
+    "INSERT INTO post_post (user_id, category_id, title, foto, description) VALUES (?, ?, ?, ?, ?)";
+
+  db.query(
+    query,
+    [user_id, category_id, title, foto, description],
+    (err, result) => {
+      if (err) {
+        console.error("Database error:", err);
+        return res.status(500).json({ error: err.message });
+      }
+      res.status(201).json({ message: "Post created", id: result.insertId });
+    }
+  );
+});
+
+// PUT route to update a post with a file (optional)
+app.put("/api/post_post/:id", upload.single("foto"), (req, res) => {
+  console.log("Request Body:", req.body); // Check if the title is in the request body
+  console.log("Uploaded File:", req.file); // Check if the file is uploaded
+
+  const { title, category_id, description, user_id } = req.body;
+
+  if (!title) {
+    return res.status(400).json({ error: "Title is required" });
+  }
+
+  const foto = req.file ? req.file.filename : null; // Handle the file upload
+
+  const query =
+    "UPDATE post_post SET title = ?, category_id = ?, description = ?, foto = ? WHERE id = ?";
+  db.query(
+    query,
+    [title, category_id, description, foto, req.params.id],
+    (err, result) => {
+      if (err) {
+        return res.status(500).json({ error: err.message });
+      }
+      res.status(200).json({ message: "Post updated successfully" });
+    }
+  );
+});
+
+// Delete a post
+app.delete("/api/post_post/:id", (req, res) => {
+  const { id } = req.params;
+  const query = "DELETE FROM post_post WHERE id = ?";
+
+  db.query(query, [id], (err, result) => {
+    if (err) {
+      return res.status(500).json({ error: err.message });
+    }
+    if (result.affectedRows === 0) {
+      return res.status(404).json({ message: "Post not found" });
+    }
+    res.json({ message: "Post deleted" });
   });
 });
 
