@@ -730,6 +730,7 @@ app.get("/api/dashboard/stats", (req, res) => {
   const productCountQuery =
     "SELECT COUNT(*) AS product_count FROM product_product";
   const uomCountQuery = "SELECT COUNT(*) AS uom_count FROM uom_uom";
+  const postCountQuery = " SELECT COUNT(*) AS post_post";
 
   db.query(userCountQuery, (err, userResult) => {
     if (err)
@@ -747,7 +748,13 @@ app.get("/api/dashboard/stats", (req, res) => {
           return res
             .status(500)
             .json({ Error: "Failed to fetch UOM count", Details: err.message });
-
+        db.query(postCountQuery, (err, resultPost) => {
+          if (err)
+            return res.status(500).json({
+              Error: "Failed to fetch post count",
+              Details: err.message,
+            });
+        });
         // Return the aggregated data
         return res.json({
           user_count: userResult[0].user_count,
@@ -755,6 +762,7 @@ app.get("/api/dashboard/stats", (req, res) => {
           inactive_user_count: userResult[0].inactive_user_count,
           product_count: productResult[0].product_count,
           uom_count: uomResult[0].uom_count,
+          // post_count: resultPost[0].post_count, // <-- resultPost is undefined here
         });
       });
     });
@@ -859,6 +867,21 @@ app.get("/api/post_post", (req, res) => {
       return res.status(500).json({ error: err.message });
     }
     res.status(200).json(result); // Send all posts in the response
+  });
+});
+
+app.get("/api/post_post/total", (req, res) => {
+  const query = "SELECT COUNT(*) AS total_posts FROM post_post";
+
+  db.query(query, (err, result) => {
+    if (err) {
+      return res.status(500).json({ error: err.message });
+    }
+
+    // Send the total post count in the response
+    res.status(200).json({
+      totalPosts: result[0].total_posts,
+    });
   });
 });
 
@@ -1098,6 +1121,112 @@ app.delete("/api/post_post/:id", (req, res) => {
     }
     res.json({ message: "Post deleted" });
   });
+});
+
+//jenis sampah
+
+app.get("/api/jenis_sampah", (req, res) => {
+  const page = parseInt(req.query.page) || 1; // Default to page 1
+  const limit = parseInt(req.query.limit) || 4; // Default to 4 posts per page
+  const offset = (page - 1) * limit;
+
+  // Modify query to select posts with category_id = 3
+  const query = `
+    SELECT * FROM post_post
+    WHERE category_id = 3
+    LIMIT ? OFFSET ?
+  `;
+
+  db.query(query, [limit, offset], (err, result) => {
+    if (err) {
+      return res.status(500).json({ error: err.message });
+    }
+
+    if (result.length === 0) {
+      return res
+        .status(404)
+        .json({ message: "No posts found for this category" });
+    }
+
+    // Respond with the posts and pagination information
+    res.status(200).json({
+      posts: result,
+      currentPage: page,
+      totalPages: Math.ceil(result.length / limit), // Calculate total pages
+    });
+  });
+});
+
+app.get("/api/jenis_sampah/:id", (req, res) => {
+  const { id } = req.params;
+
+  // Modify query to select post with category_id = 3
+  const query = "SELECT * FROM post_post WHERE id = ? AND category_id = 3";
+
+  db.query(query, [id], (err, result) => {
+    if (err) {
+      return res.status(500).json({ error: err.message });
+    }
+
+    if (result.length === 0) {
+      return res
+        .status(404)
+        .json({ message: "Post not found for this category" });
+    }
+
+    res.status(200).json(result[0]);
+  });
+});
+
+app.post("/api/jenis_sampah", upload.single("foto"), (req, res) => {
+  const { user_id, category_id, title, description } = req.body;
+
+  // Validate required fields
+  if (!user_id || !category_id || !title || !description) {
+    return res.status(400).json({ message: "Missing required fields" });
+  }
+
+  // Handle the uploaded file (if any)
+  const foto = req.file ? req.file.filename : null;
+
+  // Insert into database (pseudo-code)
+  db.query(
+    "INSERT INTO post_post (user_id, category_id, title, description, foto) VALUES (?, 3, ?, ?, ?)",
+    [user_id, category_id, title, description, foto],
+    (err, result) => {
+      if (err) {
+        return res.status(500).json({ error: err.message });
+      }
+      res.status(201).json({ id: result.insertId, created_date: new Date() });
+    }
+  );
+});
+
+app.put("/api/jenis_sampah/:id", (req, res) => {
+  const id = req.params.id;
+  // Handle update logic here
+  res.send({ message: `Updated item with id ${id}` });
+});
+
+app.get("/api/post_post/manfaat", (req, res) => {
+  const categoryId = req.query.category_id; // Get category_id from query parameters
+
+  if (!categoryId) {
+    return res.status(400).json({ error: "Category ID is required" });
+  }
+
+  // Query the database to get posts with category_id = categoryId
+  db.query(
+    "SELECT * FROM post_post WHERE category_id = ?",
+    [categoryId],
+    (err, results) => {
+      if (err) {
+        console.error("Error querying the database:", err.stack);
+        return res.status(500).json({ error: "Database query failed" });
+      }
+      res.json(results); // Send the filtered posts as JSON
+    }
+  );
 });
 
 // Start the server
