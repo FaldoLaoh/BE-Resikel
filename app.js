@@ -512,16 +512,16 @@ app.get("/uom/byId", (req, res) => {
 });
 
 // Get All Categories
-app.get("/api/categories", (req, res) => {
-  const sql = "SELECT * FROM product_category";
-  db.query(sql, (err, results) => {
-    if (err) {
-      console.error(err);
-      return res.status(500).json({ message: "Failed to fetch categories" });
-    }
-    res.json(results);
-  });
-});
+// app.get("/api/categories", (req, res) => {
+//   const sql = "SELECT * FROM product_category";
+//   db.query(sql, (err, results) => {
+//     if (err) {
+//       console.error(err);
+//       return res.status(500).json({ message: "Failed to fetch categories" });
+//     }
+//     res.json(results);
+//   });
+// });
 
 //name by id category
 
@@ -633,32 +633,77 @@ app.get("/api/categories/byId", (req, res) => {
 // });
 
 // API Endpoint: Fetch all products
-app.get("/api/products", (req, res) => {
-  const query = `
-    SELECT 
-      pp.id, 
-      pp.name, 
-      pp.list_price, 
-      pp.cost_price, 
-      pp.category_id, 
-      pc.name AS category_name,  -- Category Name
-      pp.uom_id, 
-      u.name AS uom_name,       -- UOM Name
-      pp.created_by, 
-      pp.updated_by, 
-      pp.create_date, 
-      pp.write_date 
-    FROM db_resikel.product_product pp
-    LEFT JOIN db_resikel.product_category pc ON pp.category_id = pc.id
-    LEFT JOIN db_resikel.uom_uom u ON pp.uom_id = u.id;
-  `;
+// app.get("/api/products", (req, res) => {
+//   const query = `
+//     SELECT
+//       pp.id,
+//       pp.name,
+//       pp.list_price,
+//       pp.cost_price,
+//       pp.category_id,
+//       pc.name AS category_name,  -- Category Name
+//       pp.uom_id,
+//       u.name AS uom_name,       -- UOM Name
+//       pp.created_by,
+//       pp.updated_by,
+//       pp.create_date,
+//       pp.write_date
+//     FROM db_resikel.product_product pp
+//     LEFT JOIN db_resikel.product_category pc ON pp.category_id = pc.id
+//     LEFT JOIN db_resikel.uom_uom u ON pp.uom_id = u.id;
+//   `;
 
-  db.query(query, (err, results) => {
+//   db.query(query, (err, results) => {
+//     if (err) {
+//       console.error("Error fetching products: ", err.message);
+//       return res.status(500).json({ error: "Internal Server Error" });
+//     }
+//     res.json(results);
+//   });
+// });
+app.get("/api/products", (req, res) => {
+  const sql = `SELECT id, category_id, uom_id, name, list_price, cost_price, image, create_date, write_date FROM product_product`;
+
+  db.query(sql, (err, results) => {
     if (err) {
-      console.error("Error fetching products: ", err.message);
-      return res.status(500).json({ error: "Internal Server Error" });
+      return res
+        .status(500)
+        .json({ error: "Error fetching products", details: err.message });
     }
-    res.json(results);
+    return res.json({
+      success: "Products retrieved successfully",
+      data: results,
+    });
+  });
+});
+
+app.get("/api/categories", (req, res) => {
+  const sql = `SELECT id, name FROM product_category`; // Example query
+  db.query(sql, (err, results) => {
+    if (err) {
+      return res
+        .status(500)
+        .json({ error: "Error fetching categories", details: err.message });
+    }
+    return res.json({
+      success: "Categories retrieved successfully",
+      data: results,
+    });
+  });
+});
+
+app.get("/api/uom", (req, res) => {
+  const sql = `SELECT id, name FROM uom_uom`; // Example query
+  db.query(sql, (err, results) => {
+    if (err) {
+      return res
+        .status(500)
+        .json({ error: "Error fetching UOMs", details: err.message });
+    }
+    return res.json({
+      success: "UOMs retrieved successfully",
+      data: results,
+    });
   });
 });
 
